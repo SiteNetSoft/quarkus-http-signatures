@@ -69,7 +69,7 @@ remembers the other scheme for the next call.
 |`quarkus.http-signatures.keys."<id>".algorithm` |from key type |Algorithm the key signs with
 |`quarkus.http-signatures.key-cache.ttl` |`1h` |Resolved-key cache lifetime
 |`quarkus.http-signatures.nonce.enabled` |`false` |Enable replay protection
-|`quarkus.http-signatures.clients."<name>".key-id` |none |Key a named client signs with
+|`quarkus.http-signatures.clients."<name>".key-id` |none |Key a named client signs with; without it the key named `default`, else the only key. A client name not configured here never falls back to a config key
 |`quarkus.http-signatures.clients."<name>".scheme` |preferred |Scheme for a named client
 |`quarkus.http-signatures.clients."<name>".components` |scheme default |Covered components for a named client
 |===

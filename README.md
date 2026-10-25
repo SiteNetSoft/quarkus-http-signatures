@@ -56,6 +56,6 @@ See `docs/` for the full guide and `examples/webhook` for an HMAC webhook receiv
 
 RFC 9421 signatures cover `@target-uri`/`@authority`, which the verifier derives from the request as Quarkus sees it. Behind TLS termination or a reverse proxy set `quarkus.http.proxy.proxy-address-forwarding=true` (and `quarkus.http.proxy.enable-forwarded-host=true` / `enable-forwarded-prefix=true` as needed) so the public scheme, host and path are reconstructed; otherwise every RFC 9421 signature fails with `INVALID_SIGNATURE`.
 
-Outbound key choice without a client name: the key named `default`, else the only configured key; with several keys name one `default` or configure `quarkus.http-signatures.clients."<name>".key-id`.
+Outbound key choice without a client name: the key named `default`, else the only configured key; with several keys name one `default` or configure `quarkus.http-signatures.clients."<name>".key-id`. The same fallback applies to a client name configured under `quarkus.http-signatures.clients."<name>"` without a `key-id`. A client name that is not configured there (for example one answered by an application `SigningKeyProvider`) never falls back to a config key: if no provider answers it, signing fails with `IllegalStateException`.
 
 Config keys stay active alongside your own `SigningKeyProvider` / `KeyResolver` beans (they are `@Priority(0)`); order yours with `@Priority` (higher is asked first).

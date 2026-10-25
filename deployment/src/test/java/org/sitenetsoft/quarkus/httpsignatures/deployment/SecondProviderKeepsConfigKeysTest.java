@@ -1,6 +1,7 @@
 package org.sitenetsoft.quarkus.httpsignatures.deployment;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -56,6 +57,14 @@ public class SecondProviderKeepsConfigKeysTest {
     @Test
     void appProviderUsedForItsClient() {
         assertEquals("other-key", requestSigner.keyFor(URI.create("https://x"), Optional.of("other")).keyId());
+    }
+
+    @Test
+    void unknownClientNameDoesNotFallBackToConfigKey() {
+        // a client name nobody configured (e.g. activitypub:<keyId> after the actor was deleted) must not be
+        // signed with the application's only config key under that key's id
+        assertThrows(IllegalStateException.class,
+                () -> requestSigner.keyFor(URI.create("https://x"), Optional.of("activitypub:https://x/users/a#main-key")));
     }
 
     @Test
