@@ -4,17 +4,16 @@ import java.net.URI;
 import java.util.Optional;
 import java.util.Set;
 
+import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import org.sitenetsoft.httpsignatures.SigningKey;
 
-import io.quarkus.arc.DefaultBean;
-
 /**
- * Default provider: the client's configured {@code key-id}, else the key named {@code default}, else the only key.
+ * Config-based provider (priority 0, so providers with a higher {@code @Priority} are asked first): the client's configured {@code key-id}, else the key named {@code default}, else the only key.
  */
-@DefaultBean
+@Priority(0)
 @ApplicationScoped
 public class ConfigSigningKeyProvider implements SigningKeyProvider {
 

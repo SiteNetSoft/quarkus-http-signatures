@@ -18,7 +18,7 @@ import io.quarkus.arc.All;
 /**
  * Runs every {@link KeyResolver} and {@link ReactiveKeyResolver} bean (highest priority first) and caches the result
  * for {@code quarkus.http-signatures.key-cache.ttl}. {@link #invalidate(String)} supports the refetch-once rule.
- * Not itself a {@code KeyResolver} bean, so the {@code @DefaultBean} resolver stays active.
+ * Not itself a {@code KeyResolver} bean, so the config resolver stays active.
  */
 @ApplicationScoped
 public class CachingKeyResolver {
