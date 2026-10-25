@@ -1,0 +1,16 @@
+name: "HTTP Signatures"
+artifact: ${project.groupId}:${project.artifactId}:${project.version}
+description: "Sign and verify HTTP messages with RFC 9421 and Cavage signatures and body digests"
+metadata:
+  keywords:
+    - "http-signatures"
+    - "rfc9421"
+    - "cavage"
+    - "webhook"
+    - "activitypub"
+    - "security"
+  guide: "https://github.com/SiteNetSoft/quarkus-http-signatures"
+  categories:
+    - "security"
+    - "web"
+  status: "experimental"
