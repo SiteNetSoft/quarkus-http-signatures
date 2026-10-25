@@ -15,6 +15,8 @@ import org.sitenetsoft.quarkus.httpsignatures.SignatureContext;
 import org.sitenetsoft.quarkus.httpsignatures.SigningKeyProvider;
 import org.sitenetsoft.quarkus.httpsignatures.StaticKeys;
 import org.sitenetsoft.quarkus.httpsignatures.VerificationPolicies;
+import org.sitenetsoft.quarkus.httpsignatures.rest.SignatureRequired;
+import org.sitenetsoft.quarkus.httpsignatures.rest.SignatureRequiredFilter;
 import org.sitenetsoft.quarkus.httpsignatures.security.HttpSignatureAuthenticationMechanism;
 import org.sitenetsoft.quarkus.httpsignatures.security.HttpSignatureIdentityProvider;
 import org.sitenetsoft.quarkus.httpsignatures.vertx.RequestVerifier;
@@ -28,6 +30,7 @@ import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
+import io.quarkus.deployment.builditem.AdditionalIndexedClassesBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.vertx.http.deployment.RouteBuildItem;
 
@@ -63,6 +66,15 @@ class HttpSignaturesProcessor {
                     .addBeanClasses(HttpSignatureAuthenticationMechanism.class, HttpSignatureIdentityProvider.class)
                     .setUnremovable()
                     .build());
+        }
+    }
+
+    @BuildStep
+    void restFilter(HttpSignaturesBuildTimeConfig config, Capabilities capabilities, BuildProducer<AdditionalBeanBuildItem> beans,
+            BuildProducer<AdditionalIndexedClassesBuildItem> indexed) {
+        if (config.enabled() && capabilities.isPresent(Capability.REST)) {
+            beans.produce(AdditionalBeanBuildItem.unremovableOf(SignatureRequiredFilter.class));
+            indexed.produce(new AdditionalIndexedClassesBuildItem(SignatureRequiredFilter.class.getName(), SignatureRequired.class.getName()));
         }
     }
 
