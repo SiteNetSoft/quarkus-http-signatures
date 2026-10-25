@@ -10,6 +10,9 @@ final class Der {
     static final byte[] OID_RSA = hex("06092A864886F70D010101");
     static final byte[] OID_ED25519 = hex("06032B6570");
     static final byte[] NULL = { 0x05, 0x00 };
+    static final byte[] OID_EC_PUBLIC_KEY = hex("06072A8648CE3D0201");
+    static final byte[] OID_P256 = hex("06082A8648CE3D030107");
+    static final byte[] OID_P384 = hex("06052B81040022");
 
     private Der() {
     }
@@ -62,6 +65,24 @@ final class Der {
     /** PKCS#1 RSAPublicKey -> SubjectPublicKeyInfo. */
     static byte[] pkcs1ToSpki(byte[] pkcs1) {
         return seq(seq(OID_RSA, NULL), bitString(pkcs1));
+    }
+
+    /** SEC1 ECPrivateKey ("EC PRIVATE KEY") -> PKCS#8 PrivateKeyInfo, detecting the named curve inside. */
+    static byte[] sec1ToPkcs8(byte[] sec1) {
+        byte[] curve = contains(sec1, OID_P384) ? OID_P384 : OID_P256;
+        return seq(integer(0), seq(OID_EC_PUBLIC_KEY, curve), octetString(sec1));
+    }
+
+    static boolean contains(byte[] haystack, byte[] needle) {
+        outer: for (int i = 0; i <= haystack.length - needle.length; i++) {
+            for (int j = 0; j < needle.length; j++) {
+                if (haystack[i + j] != needle[j]) {
+                    continue outer;
+                }
+            }
+            return true;
+        }
+        return false;
     }
 
     /** Raw 32-byte Ed25519 public key -> SubjectPublicKeyInfo. */

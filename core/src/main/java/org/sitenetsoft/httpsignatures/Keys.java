@@ -65,6 +65,7 @@ public final class Keys {
                 case "PUBLIC KEY" -> publicKey(der);
                 case "RSA PRIVATE KEY" -> privateKey(Der.pkcs1ToPkcs8(der));
                 case "RSA PUBLIC KEY" -> publicKey(Der.pkcs1ToSpki(der));
+                case "EC PRIVATE KEY" -> privateKey(Der.sec1ToPkcs8(der));
                 default -> throw new IllegalArgumentException("Unsupported PEM block: " + type);
             });
         }
@@ -74,7 +75,7 @@ public final class Keys {
     private static Key privateKey(byte[] pkcs8) {
         PKCS8EncodedKeySpec spec = new PKCS8EncodedKeySpec(pkcs8);
         GeneralSecurityException last = null;
-        for (String alg : new String[] { "RSA", "EC", "Ed25519" }) {
+        for (String alg : new String[] { "RSA", "RSASSA-PSS", "EC", "Ed25519" }) {
             try {
                 return KeyFactory.getInstance(alg).generatePrivate(spec);
             } catch (GeneralSecurityException e) {
@@ -87,7 +88,7 @@ public final class Keys {
     private static Key publicKey(byte[] spki) {
         X509EncodedKeySpec spec = new X509EncodedKeySpec(spki);
         GeneralSecurityException last = null;
-        for (String alg : new String[] { "RSA", "EC", "Ed25519" }) {
+        for (String alg : new String[] { "RSA", "RSASSA-PSS", "EC", "Ed25519" }) {
             try {
                 return KeyFactory.getInstance(alg).generatePublic(spec);
             } catch (GeneralSecurityException e) {
