@@ -11,6 +11,7 @@ import org.sitenetsoft.httpsignatures.HttpVerifier;
 import org.sitenetsoft.httpsignatures.VerificationPolicy;
 import org.sitenetsoft.httpsignatures.VerificationResult;
 import org.sitenetsoft.quarkus.httpsignatures.CachingKeyResolver;
+import org.sitenetsoft.quarkus.httpsignatures.HttpSignaturesConfig;
 import org.sitenetsoft.quarkus.httpsignatures.VerificationPolicies;
 
 import io.quarkus.runtime.LaunchMode;
@@ -33,13 +34,24 @@ public class RequestVerifier {
     private final Vertx vertx;
     private final VerificationPolicies policies;
     private final CachingKeyResolver keys;
+    private final long maxBodySize;
     private final HttpVerifier verifier = new HttpVerifier();
 
     @Inject
-    public RequestVerifier(Vertx vertx, VerificationPolicies policies, CachingKeyResolver keys) {
+    public RequestVerifier(Vertx vertx, VerificationPolicies policies, CachingKeyResolver keys, HttpSignaturesConfig config) {
         this.vertx = vertx;
         this.policies = policies;
         this.keys = keys;
+        this.maxBodySize = config.verify().maxBodySize().asLongValue();
+    }
+
+    /**
+     * The signed request body is larger than {@code quarkus.http-signatures.verify.max-body-size}.
+     */
+    public static final class BodyTooLargeException extends RuntimeException {
+        public BodyTooLargeException(long limit) {
+            super("Signed request body exceeds " + limit + " bytes");
+        }
     }
 
     public static boolean hasSignature(RoutingContext ctx) {
@@ -54,7 +66,7 @@ public class RequestVerifier {
         if (existing != null) {
             return Uni.createFrom().item(existing);
         }
-        return body(ctx).chain(body -> {
+        return body(ctx, maxBodySize).chain(body -> {
             HttpMessageView msg = VertxMessageView.of(ctx, body);
             VerificationPolicy policy = policies.current();
             return Uni.createFrom().completionStage(vertx.executeBlocking(() -> verifyWithRetry(msg, policy), false).toCompletionStage());
@@ -106,36 +118,64 @@ public class RequestVerifier {
     }
 
     /**
-     * The request body, buffering it once and leaving it on the context for later handlers (Quarkus REST reads
-     * {@code ctx.getBody()} when it is already present).
+     * The request body, buffered once (bounded by {@code maxBodySize}) and left on the context for later handlers
+     * (Quarkus REST reads {@code ctx.getBody()} when it is already present). Fails with {@link BodyTooLargeException}.
      */
-    public static Uni<byte[]> body(RoutingContext ctx) {
+    public static Uni<byte[]> body(RoutingContext ctx, long maxBodySize) {
         Buffer existing = ctx.getBody();
         if (existing != null) {
             return Uni.createFrom().item(existing.getBytes());
         }
-        if (!expectsBody(ctx)) {
+        String contentLength = ctx.request().getHeader("Content-Length");
+        if (!shouldReadBody(ctx.request().method().name(), contentLength, ctx.request().getHeader("Transfer-Encoding"))) {
             return Uni.createFrom().item((byte[]) null);
         }
-        // Quarkus pauses the request before handlers run; body() needs the stream flowing again
-        io.vertx.core.Future<Buffer> future = ctx.request().body();
+        if (contentLength != null) {
+            try {
+                if (Long.parseLong(contentLength.strip()) > maxBodySize) {
+                    return Uni.createFrom().failure(new BodyTooLargeException(maxBodySize));
+                }
+            } catch (NumberFormatException ignored) {
+                // the streamed limit below still applies
+            }
+        }
+        io.vertx.core.Promise<Buffer> promise = io.vertx.core.Promise.promise();
+        Buffer acc = Buffer.buffer();
+        ctx.request().handler(chunk -> {
+            if (acc.length() + chunk.length() > maxBodySize) {
+                promise.tryFail(new BodyTooLargeException(maxBodySize));
+                return;
+            }
+            acc.appendBuffer(chunk);
+        });
+        ctx.request().endHandler(v -> promise.tryComplete(acc));
+        ctx.request().exceptionHandler(promise::tryFail);
+        // Quarkus pauses the request before handlers run; the stream has to flow again
         ctx.request().resume();
-        return Uni.createFrom().completionStage(future.toCompletionStage()).map(buf -> {
+        return Uni.createFrom().completionStage(promise.future().toCompletionStage()).map(buf -> {
             ctx.setBody(buf);
-            return buf == null ? null : buf.getBytes();
+            return buf.getBytes();
         });
     }
 
-    private static boolean expectsBody(RoutingContext ctx) {
-        String cl = ctx.request().getHeader("Content-Length");
-        if (cl != null) {
+    /**
+     * Whether a request may carry a body worth digest-checking. HTTP/2 requests have neither Content-Length nor
+     * Transfer-Encoding, so body-capable methods are always read (an absent body just yields no bytes).
+     */
+    static boolean shouldReadBody(String method, String contentLength, String transferEncoding) {
+        if (contentLength != null) {
             try {
-                return Long.parseLong(cl.strip()) > 0;
+                return Long.parseLong(contentLength.strip()) > 0;
             } catch (NumberFormatException e) {
-                return false;
+                return true;
             }
         }
-        String te = ctx.request().getHeader("Transfer-Encoding");
-        return te != null && te.toLowerCase(java.util.Locale.ROOT).contains("chunked");
+        if (transferEncoding != null && transferEncoding.toLowerCase(java.util.Locale.ROOT).contains("chunked")) {
+            return true;
+        }
+        return switch (method.toUpperCase(java.util.Locale.ROOT)) {
+            case "GET", "HEAD", "OPTIONS", "TRACE", "DELETE" -> false;
+            default -> true;
+        };
     }
 }

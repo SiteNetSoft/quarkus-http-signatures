@@ -62,6 +62,7 @@ remembers the other scheme for the next call.
 |`quarkus.http-signatures.verify.require-digest` |`true` |Reject bodies without a digest
 |`quarkus.http-signatures.verify.schemes` |`rfc9421,cavage` |Schemes accepted
 |`quarkus.http-signatures.verify.paths` |none |Path patterns for the Vert.x handler
+|`quarkus.http-signatures.verify.max-body-size` |`10M` |Largest signed body buffered for digest checks
 |`quarkus.http-signatures.sign.preferred-scheme` |`rfc9421` |First scheme tried outbound
 |`quarkus.http-signatures.sign.fallback` |`true` |Retry with the other scheme on 401/403
 |`quarkus.http-signatures.keys."<id>".location` |none |PEM or JWK file for a static key
@@ -72,3 +73,12 @@ remembers the other scheme for the next call.
 |`quarkus.http-signatures.clients."<name>".scheme` |preferred |Scheme for a named client
 |`quarkus.http-signatures.clients."<name>".components` |scheme default |Covered components for a named client
 |===
+
+== Reverse proxies
+
+The verifier derives `@target-uri` and `@authority` from the request as Quarkus sees it. Behind TLS termination or a
+reverse proxy, enable `quarkus.http.proxy.proxy-address-forwarding=true` (and the forwarded host/prefix options) so the
+public URL is reconstructed; otherwise every RFC 9421 signature fails.
+
+Signed request bodies are buffered for digest checking up to `quarkus.http-signatures.verify.max-body-size`
+(default `10M`); larger bodies are answered with `413`.

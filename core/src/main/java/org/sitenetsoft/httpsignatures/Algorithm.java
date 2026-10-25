@@ -60,11 +60,13 @@ public enum Algorithm {
     }
 
     /**
-     * The concrete algorithm {@code hs2019} means for a key type (draft-cavage-12 section 6.3).
+     * The concrete algorithm {@code hs2019} means for a key type when the key pins none. The draft suggests RSA-PSS
+     * for RSA, but every Fediverse implementation (Mastodon, Smithereen, ...) signs and verifies {@code hs2019} RSA
+     * as {@code rsa-sha256}, so that is what interoperates.
      */
     public static Algorithm forHs2019(KeyType keyType) {
         return switch (keyType) {
-            case RSA -> RSA_PSS_SHA512;
+            case RSA -> RSA_SHA256;
             case ED25519 -> ED25519;
             case EC_P256 -> ECDSA_P256_SHA256;
             case EC_P384 -> ECDSA_P384_SHA384;

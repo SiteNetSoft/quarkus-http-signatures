@@ -25,18 +25,32 @@ public class CachingKeyResolver {
 
     private final List<KeyResolver> resolvers;
     private final List<ReactiveKeyResolver> reactiveResolvers;
-    private final Cache<String, Optional<VerificationKey>> cache;
+    private final Cache<String, VerificationKey> cache;
 
     @Inject
     public CachingKeyResolver(@All List<KeyResolver> resolvers, @All List<ReactiveKeyResolver> reactiveResolvers,
             HttpSignaturesConfig config) {
-        this.resolvers = resolvers;
-        this.reactiveResolvers = reactiveResolvers;
-        this.cache = Caffeine.newBuilder().maximumSize(10_000).expireAfterWrite(config.keyCache().ttl()).build();
+        this(resolvers, reactiveResolvers, config.keyCache().ttl());
     }
 
+    CachingKeyResolver(List<KeyResolver> resolvers, List<ReactiveKeyResolver> reactiveResolvers, Duration ttl) {
+        this.resolvers = resolvers;
+        this.reactiveResolvers = reactiveResolvers;
+        this.cache = Caffeine.newBuilder().maximumSize(10_000).expireAfterWrite(ttl).build();
+    }
+
+    /**
+     * Only hits are cached: a miss (unknown key, or a transient failure in an app resolver) is asked again next time
+     * instead of locking the key id out for the whole TTL.
+     */
     public Optional<VerificationKey> resolve(String keyId) {
-        return cache.get(keyId, this::lookup);
+        VerificationKey hit = cache.getIfPresent(keyId);
+        if (hit != null) {
+            return Optional.of(hit);
+        }
+        Optional<VerificationKey> found = lookup(keyId);
+        found.ifPresent(k -> cache.put(keyId, k));
+        return found;
     }
 
     /**

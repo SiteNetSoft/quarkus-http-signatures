@@ -40,9 +40,15 @@ public class HttpSignatureAuthenticationMechanism implements HttpAuthenticationM
             return Uni.createFrom().nullItem();
         }
         return verifier.verify(context)
-                .onFailure().transform(t -> t instanceof HttpSignatureException e
-                        ? new AuthenticationFailedException("HTTP signature rejected: " + e.reason())
-                        : new AuthenticationFailedException("HTTP signature could not be verified", t))
+                .onFailure().transform(t -> {
+                    if (t instanceof RequestVerifier.BodyTooLargeException) {
+                        context.response().setStatusCode(413).end();
+                        return new AuthenticationFailedException("HTTP signature rejected: body too large");
+                    }
+                    return t instanceof HttpSignatureException e
+                            ? new AuthenticationFailedException("HTTP signature rejected: " + e.reason())
+                            : new AuthenticationFailedException("HTTP signature could not be verified", t);
+                })
                 .chain(result -> {
                     HttpSignatureAuthenticationRequest request = new HttpSignatureAuthenticationRequest(result);
                     HttpSecurityUtils.setRoutingContextAttribute(request, context);

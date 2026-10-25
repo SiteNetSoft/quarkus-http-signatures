@@ -36,6 +36,7 @@ import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.AdditionalIndexedClassesBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
+import io.quarkus.vertx.http.deployment.HttpRootPathBuildItem;
 import io.quarkus.vertx.http.deployment.RouteBuildItem;
 
 class HttpSignaturesProcessor {
@@ -85,12 +86,14 @@ class HttpSignaturesProcessor {
 
     @BuildStep
     @Record(ExecutionTime.STATIC_INIT)
-    void pathVerification(HttpSignaturesBuildTimeConfig config, HttpSignaturesRecorder recorder, BuildProducer<RouteBuildItem> routes) {
+    void pathVerification(HttpSignaturesBuildTimeConfig config, HttpRootPathBuildItem rootPath, HttpSignaturesRecorder recorder,
+            BuildProducer<RouteBuildItem> routes) {
         if (!config.enabled()) {
             return;
         }
-        // one early global route; the handler checks quarkus.http-signatures.verify.paths at runtime and calls next()
-        routes.produce(RouteBuildItem.builder()
+        // one early global route at the server root (not under quarkus.http.root-path); the handler checks
+        // quarkus.http-signatures.verify.paths at runtime and calls next()
+        routes.produce(rootPath.routeBuilder()
                 .orderedRoute("/*", -1_000_000)
                 .handler(recorder.pathHandler())
                 .build());

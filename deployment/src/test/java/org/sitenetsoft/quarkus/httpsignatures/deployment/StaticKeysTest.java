@@ -69,6 +69,8 @@ public class StaticKeysTest {
         assertInstanceOf(PublicKey.class, v.key());
         assertEquals(KeyType.RSA, s.keyType());
         assertEquals(Algorithm.RSA_V1_5_SHA256, s.algorithm());
+        // the verification side pins the same algorithm, so unsigned-alg RFC 9421 round trips work by default
+        assertEquals(Optional.of(Algorithm.RSA_V1_5_SHA256), v.algorithm());
     }
 
     @Test

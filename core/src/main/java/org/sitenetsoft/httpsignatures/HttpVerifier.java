@@ -141,9 +141,13 @@ public final class HttpVerifier implements Verifier {
         return new VerificationResult(Scheme.RFC9421, keyId, alg, h.covered, created, key);
     }
 
+    /**
+     * The algorithm assumed for an unpinned key when {@code Signature-Input} carries no {@code alg}. RSA defaults to
+     * {@code rsa-v1_5-sha256}, matching what this library signs with by default and what the Fediverse uses.
+     */
     static Algorithm defaultRfc9421(KeyType type) {
         return switch (type) {
-            case RSA -> Algorithm.RSA_PSS_SHA512;
+            case RSA -> Algorithm.RSA_V1_5_SHA256;
             case EC_P256 -> Algorithm.ECDSA_P256_SHA256;
             case EC_P384 -> Algorithm.ECDSA_P384_SHA384;
             case ED25519 -> Algorithm.ED25519;
@@ -163,7 +167,8 @@ public final class HttpVerifier implements Verifier {
         if (p.algorithm().isPresent()) {
             Algorithm declared = Algorithm.fromId(p.algorithm().get()).filter(Algorithm::isCavage).orElseThrow(
                     () -> new HttpSignatureException(Reason.UNSUPPORTED_ALGORITHM, "Unsupported algorithm " + p.algorithm().get()));
-            alg = declared == Algorithm.HS2019 ? Algorithm.forHs2019(keyType) : declared;
+            // hs2019 takes the algorithm from the key: its pinned algorithm first, else the key type's convention
+            alg = declared == Algorithm.HS2019 ? key.algorithm().orElseGet(() -> Algorithm.forHs2019(keyType)) : declared;
             if (declared != Algorithm.HS2019 && key.algorithm().isPresent() && key.algorithm().get() != alg) {
                 throw new HttpSignatureException(Reason.ALGORITHM_KEY_MISMATCH, "Declared algorithm does not match the key's");
             }
@@ -186,11 +191,15 @@ public final class HttpVerifier implements Verifier {
         requireComponents(covered, policy);
         checkDigest(msg, policy, "Digest", "Content-Digest");
 
-        Instant created = p.created().map(Instant::ofEpochSecond).orElseGet(() -> dateHeader(msg));
-        Optional<Instant> expires = p.expires().map(Instant::ofEpochSecond);
+        // created/expires parameters only count when they are covered by the signature; an uncovered
+        // parameter is attacker-controlled and must not override the signed Date header
+        Optional<Long> coveredCreated = covers(covered, "(created)") ? p.created() : Optional.empty();
+        Optional<Long> coveredExpires = covers(covered, "(expires)") ? p.expires() : Optional.empty();
+        Instant created = coveredCreated.map(Instant::ofEpochSecond).orElseGet(() -> dateHeader(msg));
+        Optional<Instant> expires = coveredExpires.map(Instant::ofEpochSecond);
         checkTime(created, expires, policy);
 
-        String base = SignatureBase.cavage(msg, p.headers(), p.created(), p.expires());
+        String base = SignatureBase.cavage(msg, p.headers(), coveredCreated, coveredExpires);
         if (!Jca.verify(alg, Scheme.CAVAGE, key.key(), base.getBytes(StandardCharsets.UTF_8), p.signature())) {
             throw new HttpSignatureException(Reason.INVALID_SIGNATURE, "Signature does not verify");
         }

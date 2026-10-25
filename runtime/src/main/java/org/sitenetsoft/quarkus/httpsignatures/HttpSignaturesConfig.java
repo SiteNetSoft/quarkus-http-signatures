@@ -11,6 +11,7 @@ import org.sitenetsoft.httpsignatures.Scheme;
 import io.quarkus.runtime.annotations.ConfigDocMapKey;
 import io.quarkus.runtime.annotations.ConfigPhase;
 import io.quarkus.runtime.annotations.ConfigRoot;
+import io.quarkus.runtime.configuration.MemorySize;
 import io.smallrye.config.ConfigMapping;
 import io.smallrye.config.WithConverter;
 import io.smallrye.config.WithDefault;
@@ -80,6 +81,12 @@ public interface HttpSignaturesConfig {
          * Vert.x path patterns (for example {@code /inbox/*}) that require a valid signature.
          */
         Optional<List<String>> paths();
+
+        /**
+         * Largest request body the verifier buffers for digest checking; larger signed requests are rejected with 413.
+         */
+        @WithDefault("10M")
+        MemorySize maxBodySize();
     }
 
     interface Sign {

@@ -98,7 +98,8 @@ public class StaticKeys {
                 signing = Optional.of(new SigningKey(id, algorithm, priv));
             }
             if (pub != null) {
-                verification = Optional.of(new VerificationKey(id, kc.algorithm(), pub));
+                // pin the same algorithm the signing side uses, so RFC 9421 signatures without an alg parameter verify
+                verification = Optional.of(new VerificationKey(id, Optional.of(algorithm), pub));
             }
         }
         LOG.debugf("Loaded static key '%s' (%s)", id, KeyType.of(anyKey));

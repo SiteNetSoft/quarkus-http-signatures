@@ -61,6 +61,10 @@ public class VertxSignatureHandler implements Handler<RoutingContext> {
             return;
         }
         verifier.verify(ctx).subscribe().with(result -> ctx.next(), failure -> {
+            if (failure instanceof RequestVerifier.BodyTooLargeException) {
+                ctx.response().setStatusCode(413).end();
+                return;
+            }
             if (!(failure instanceof HttpSignatureException)) {
                 LOG.debug("Signature verification error", failure);
             }
