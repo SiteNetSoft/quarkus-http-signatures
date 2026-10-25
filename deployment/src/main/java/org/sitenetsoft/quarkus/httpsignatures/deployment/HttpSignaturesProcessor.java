@@ -15,6 +15,10 @@ import org.sitenetsoft.quarkus.httpsignatures.SignatureContext;
 import org.sitenetsoft.quarkus.httpsignatures.SigningKeyProvider;
 import org.sitenetsoft.quarkus.httpsignatures.StaticKeys;
 import org.sitenetsoft.quarkus.httpsignatures.VerificationPolicies;
+import org.sitenetsoft.quarkus.httpsignatures.client.RequestSigner;
+import org.sitenetsoft.quarkus.httpsignatures.client.SchemeMemory;
+import org.sitenetsoft.quarkus.httpsignatures.client.SigningHttpClient;
+import org.sitenetsoft.quarkus.httpsignatures.client.VertxRequestSigner;
 import org.sitenetsoft.quarkus.httpsignatures.rest.SignatureRequired;
 import org.sitenetsoft.quarkus.httpsignatures.rest.SignatureRequiredFilter;
 import org.sitenetsoft.quarkus.httpsignatures.security.HttpSignatureAuthenticationMechanism;
@@ -52,7 +56,8 @@ class HttpSignaturesProcessor {
         beans.produce(AdditionalBeanBuildItem.builder()
                 .addBeanClasses(StaticKeys.class, ConfigKeyResolver.class, ConfigSigningKeyProvider.class, InMemoryNonceStore.class,
                         CachingKeyResolver.class, VerificationPolicies.class, SignatureContext.class, RequestVerifier.class,
-                        VertxSignatureHandler.class)
+                        VertxSignatureHandler.class, SchemeMemory.class, RequestSigner.class, SigningHttpClient.class,
+                        VertxRequestSigner.class)
                 .setUnremovable()
                 .build());
         unremovable.produce(UnremovableBeanBuildItem.beanTypes(KeyResolver.class, ReactiveKeyResolver.class,
