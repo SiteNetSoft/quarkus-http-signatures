@@ -1,0 +1,74 @@
+= Quarkus HTTP Signatures
+:extension-status: experimental
+
+Signs and verifies HTTP messages under RFC 9421 and the older Cavage draft 12, with body digests
+(RFC 9530 `Content-Digest`, legacy `Digest`). The verifier picks the scheme from the headers: `Signature-Input`
+means RFC 9421, a lone `Signature` means Cavage.
+
+== Modules
+
+* `http-signatures-core`: a plain library (signature base, signing, verification, structured fields, digests, PEM
+  and JWK key parsing). Works in any Java or Kotlin program.
+* `quarkus-http-signatures`: the extension (Vert.x, Quarkus REST, REST Client and Quarkus Security integration,
+  static keys from config, Dev UI).
+
+== Keys
+
+[source,properties]
+----
+quarkus.http-signatures.keys.main.location=keys/main.pem      # PKCS#8 private + public key blocks
+quarkus.http-signatures.keys.hook.location=keys/hook.jwk      # {"kty":"oct","k":"..."} for HMAC
+quarkus.http-signatures.keys.hook.algorithm=hmac-sha256
+----
+
+Replace `KeyResolver` (verification keys, for example fetched from an ActivityPub actor), `SigningKeyProvider`
+(outbound key choice) or `NonceStore` (shared replay protection) by providing a CDI bean. Each has a `Reactive…`
+variant. Resolved keys are cached; a signature failure refetches once, which covers key rotation.
+
+== Verifying incoming requests
+
+* `@SignatureRequired` on a Quarkus REST method or class. `@SignatureRequired(components = {"@method",
+  "@target-uri", "content-digest"})` tightens the policy.
+* `quarkus.http-signatures.verify.paths=/inbox/*` protects plain Vert.x routes.
+* With `quarkus-security`, a signed request becomes a `SecurityIdentity` whose principal is the key id and whose
+  role is `signed`, so `@Authenticated`, `@RolesAllowed` and HTTP permission policies work unchanged.
+* A verified request exposes the request-scoped `SignatureContext`.
+* Failures answer `401` with no detail. In dev and test mode the signature base is logged at DEBUG.
+
+Security rules always applied: RFC 9421 must cover `@method`, `@target-uri` (or `@authority` and `@path`) and
+`content-digest` with a body; Cavage must cover `(request-target)`, `host`, `date` and `digest` with a body; the
+digest is checked against the actual body; `created` or `Date` must fall within the clock-skew and max-age window;
+`expires` is enforced; the algorithm must match the key type; HMAC comparisons are constant time.
+
+== Signing outgoing requests
+
+* REST Client: annotate the interface with `@RegisterProvider(HttpSignatureClientFilter.class)` and
+  `@SignRequests(client = "partner")`. Bodies get a `Content-Digest` (and `Digest` for Cavage) before signing.
+* `java.net.http`: `SigningHttpClient.send(client, request, bodyBytes, Optional.of("partner"))`.
+* Vert.x Web Client: `VertxRequestSigner.sign(request, uri, bodyBytes, clientName)`.
+
+*Double knocking.* The preferred scheme is tried first. On `401` or `403`, `SigningHttpClient` retries once with
+the other scheme and remembers the answer per host. The REST Client filter cannot retry a request, so it only
+remembers the other scheme for the next call.
+
+== Configuration
+
+[cols="3,1,3"]
+|===
+|Property |Default |Purpose
+
+|`quarkus.http-signatures.verify.clock-skew` |`5m` |Allowed drift on `created` or `Date`
+|`quarkus.http-signatures.verify.max-age` |`1h` |Oldest signature accepted
+|`quarkus.http-signatures.verify.require-digest` |`true` |Reject bodies without a digest
+|`quarkus.http-signatures.verify.schemes` |`rfc9421,cavage` |Schemes accepted
+|`quarkus.http-signatures.verify.paths` |none |Path patterns for the Vert.x handler
+|`quarkus.http-signatures.sign.preferred-scheme` |`rfc9421` |First scheme tried outbound
+|`quarkus.http-signatures.sign.fallback` |`true` |Retry with the other scheme on 401/403
+|`quarkus.http-signatures.keys."<id>".location` |none |PEM or JWK file for a static key
+|`quarkus.http-signatures.keys."<id>".algorithm` |from key type |Algorithm the key signs with
+|`quarkus.http-signatures.key-cache.ttl` |`1h` |Resolved-key cache lifetime
+|`quarkus.http-signatures.nonce.enabled` |`false` |Enable replay protection
+|`quarkus.http-signatures.clients."<name>".key-id` |none |Key a named client signs with
+|`quarkus.http-signatures.clients."<name>".scheme` |preferred |Scheme for a named client
+|`quarkus.http-signatures.clients."<name>".components` |scheme default |Covered components for a named client
+|===

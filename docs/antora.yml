@@ -1,0 +1,5 @@
+name: quarkus-http-signatures
+title: Quarkus HTTP Signatures
+version: dev
+nav:
+  - modules/ROOT/nav.adoc
