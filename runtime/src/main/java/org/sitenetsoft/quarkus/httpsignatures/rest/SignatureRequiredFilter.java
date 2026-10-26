@@ -26,9 +26,12 @@ public class SignatureRequiredFilter {
     @Inject
     RequestVerifier verifier;
 
+    @Inject
+    SignatureRequiredRegistry registry;
+
     @ServerRequestFilter
     public Uni<Response> filter(ResourceInfo info, RoutingContext ctx) {
-        SignatureRequired required = find(info);
+        SignatureRequired required = find(registry, info);
         if (required == null) {
             return Uni.createFrom().nullItem();
         }
@@ -43,13 +46,26 @@ public class SignatureRequiredFilter {
                 });
     }
 
-    static SignatureRequired find(ResourceInfo info) {
-        Method m = info.getResourceMethod();
+    /**
+     * Resolves the annotation without reflection unless the build-time registry says the resource class carries it;
+     * only those classes are registered for reflection in a native image.
+     */
+    static SignatureRequired find(SignatureRequiredRegistry registry, ResourceInfo info) {
+        Class<?> c = info.getResourceClass();
+        if (c == null || !registry.applies(c)) {
+            return null;
+        }
+        Method m;
+        try {
+            m = info.getResourceMethod();
+        } catch (RuntimeException e) {
+            LOG.debugf("@SignatureRequired: resource method of %s not resolvable (%s); using the class-level annotation", c, e);
+            m = null;
+        }
         if (m != null && m.isAnnotationPresent(SignatureRequired.class)) {
             return m.getAnnotation(SignatureRequired.class);
         }
-        Class<?> c = info.getResourceClass();
-        return c == null ? null : c.getAnnotation(SignatureRequired.class);
+        return c.getAnnotation(SignatureRequired.class);
     }
 
     static boolean coversAll(VerificationResult result, String[] components) {

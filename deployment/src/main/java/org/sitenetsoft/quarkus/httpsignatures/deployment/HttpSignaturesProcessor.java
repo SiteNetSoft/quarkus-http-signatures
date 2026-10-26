@@ -84,6 +84,44 @@ class HttpSignaturesProcessor {
         }
     }
 
+    /**
+     * Finds every resource class carrying {@code @SignatureRequired} (on the class or a method) in the Jandex index,
+     * registers only those for reflection, and hands the set to the filter as a {@link SignatureRequiredRegistry}
+     * bean so unannotated resources never trigger a reflective method lookup.
+     */
+    @BuildStep
+    @Record(ExecutionTime.STATIC_INIT)
+    void signatureRequiredRegistry(HttpSignaturesBuildTimeConfig config, Capabilities capabilities,
+            io.quarkus.deployment.builditem.CombinedIndexBuildItem index, HttpSignaturesRecorder recorder,
+            BuildProducer<io.quarkus.arc.deployment.SyntheticBeanBuildItem> beans,
+            BuildProducer<io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem> reflective) {
+        if (!config.enabled() || !capabilities.isPresent(Capability.REST)) {
+            return;
+        }
+        java.util.Set<String> classes = new java.util.TreeSet<>();
+        org.jboss.jandex.DotName annotation = org.jboss.jandex.DotName.createSimple(SignatureRequired.class.getName());
+        for (org.jboss.jandex.AnnotationInstance a : index.getIndex().getAnnotations(annotation)) {
+            org.jboss.jandex.AnnotationTarget target = a.target();
+            switch (target.kind()) {
+                case METHOD -> classes.add(target.asMethod().declaringClass().name().toString());
+                case CLASS -> classes.add(target.asClass().name().toString());
+                default -> {
+                    // parameters and fields are not supported targets
+                }
+            }
+        }
+        if (!classes.isEmpty()) {
+            reflective.produce(io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem
+                    .builder(classes.toArray(String[]::new)).methods().build());
+        }
+        beans.produce(io.quarkus.arc.deployment.SyntheticBeanBuildItem
+                .configure(org.sitenetsoft.quarkus.httpsignatures.rest.SignatureRequiredRegistry.class)
+                .scope(jakarta.inject.Singleton.class)
+                .unremovable()
+                .supplier(recorder.signatureRequiredRegistry(classes))
+                .done());
+    }
+
     @BuildStep
     @Record(ExecutionTime.STATIC_INIT)
     void pathVerification(HttpSignaturesBuildTimeConfig config, HttpRootPathBuildItem rootPath, HttpSignaturesRecorder recorder,
